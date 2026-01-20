@@ -140,11 +140,6 @@ static uint8_t ford_v0_calculate_bs(uint32_t count, uint8_t button, uint8_t bs_m
     //Do the BS calculation
     result = ((uint16_t)count & 0xFF) + bs_magic + (button << 4);
 
-    //Handle the OVerflow
-    if(result & 0xFF00) {
-        result -= 128;
-    }
-
     //Return the last byte of result
     return (uint8_t)(result & 0xFF);
 }
@@ -272,8 +267,7 @@ static void decode_ford_v0(
     *count = ((buf[5] & 0x0F) << 16) | (buf[6] << 8) | buf[7];
 
     //Build the BS Magic number for this fob.
-    *bs_magic = bs + ((bs & 0x80) ? 0x80 : 0);
-    *bs_magic -= (*button << 4);
+    *bs_magic = bs - (*button << 4);
     *bs_magic -= (uint8_t)(*count & 0xFF);
 }
 
