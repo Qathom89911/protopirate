@@ -11,8 +11,8 @@ The app currently supports decoding for multiple automotive key-fob families (Ki
 |:------------------------------|:--------|:--------|
 | Fiat V0                       | ✅ | ✅ |
 | Ford V0                       | ✅ | ✅ |
-| KIA V0 / V1 / V2 / V3 / V4    | ✅ | ✅ |
-| KIA V5 / V6                   | ✅ | ❌ |
+| Kia V0 / V1 / V2 / V3 / V4    | ✅ | ✅ |
+| Kia V5 / V6                   | ✅ | ❌ |
 | Scher-Khan                    | ✅ | ❌ |
 | StarLine                      | ✅ | ✅ |
 | Subaru                        | ✅ | ✅ |
