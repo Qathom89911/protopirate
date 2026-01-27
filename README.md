@@ -17,6 +17,7 @@ The app currently supports decoding for multiple automotive key-fob families (Ki
 | StarLine                      | ✅ | ✅ |
 | Subaru                        | ✅ | ✅ |
 | Suzuki                        | ✅ | ✅ |
+| PSA                           | ✅ | ✅ |
 | Volkswagen (VW)               | ✅ | ❌ |
 
 _More Coming Soon_
