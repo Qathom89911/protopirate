@@ -39,6 +39,7 @@ typedef struct {
     uint8_t lock_count;
     uint8_t animation_frame;
     bool radar_view;
+    bool sub_decode_mode;
 } ProtoPirateReceiverModel;
 
 static void protopirate_view_rssi_draw(Canvas* canvas, ProtoPirateReceiverModel* model) {
@@ -60,6 +61,17 @@ static void protopirate_view_rssi_draw(Canvas* canvas, ProtoPirateReceiverModel*
         } else
             spacer++;
     }
+}
+
+void protopirate_view_receiver_set_sub_decode_mode(
+    ProtoPirateReceiver* receiver,
+    bool sub_decode_mode) {
+    furi_assert(receiver);
+    with_view_model(
+        receiver->view,
+        ProtoPirateReceiverModel * model,
+        { model->sub_decode_mode = sub_decode_mode; },
+        true);
 }
 
 void protopirate_view_receiver_set_rssi(ProtoPirateReceiver* receiver, float rssi) {
@@ -176,9 +188,38 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
     FuriString* str_buff;
     str_buff = furi_string_alloc();
 
-    //Config button. (Do it at the top so we dont get Inversion problems from the list view part.)
-    elements_button_left(canvas, "Config");
+    if(!model->sub_decode_mode) {
+        //Config button. (Do it at the top so we dont get Inversion problems from the list view part.)
+        elements_button_left(canvas, "Config");
 
+        // Draw RSSI
+        protopirate_view_rssi_draw(canvas, model);
+
+        //Draw To Unlock, Locked etc...
+        if(model->lock_count) {
+            canvas_draw_str(canvas, 44, 63, furi_string_get_cstr(model->frequency_str));
+            canvas_draw_str(canvas, 79, 63, furi_string_get_cstr(model->preset_str));
+            canvas_draw_str(canvas, 96, 63, furi_string_get_cstr(model->history_stat_str));
+            canvas_set_font(canvas, FontSecondary);
+            elements_bold_rounded_frame(canvas, 14, 8, 99, 48);
+            elements_multiline_text(canvas, 65, 26, "To unlock\npress:");
+            canvas_draw_icon(canvas, 65, 42, &I_Pin_back_arrow_10x8);
+            canvas_draw_icon(canvas, 80, 42, &I_Pin_back_arrow_10x8);
+            canvas_draw_icon(canvas, 95, 42, &I_Pin_back_arrow_10x8);
+            canvas_draw_icon(canvas, 16, 13, &I_WarningDolphin_45x42);
+            canvas_draw_dot(canvas, 17, 61);
+        } else {
+            if(model->lock == ProtoPirateLockOn) {
+                canvas_draw_icon(canvas, 64, 55, &I_Lock_7x8);
+                canvas_draw_str(canvas, 74, 62, "Locked");
+            } else {
+                canvas_draw_str(canvas, 44, 63, furi_string_get_cstr(model->frequency_str));
+                canvas_draw_str(canvas, 79, 63, furi_string_get_cstr(model->preset_str));
+                canvas_draw_str(canvas, 96, 63, furi_string_get_cstr(model->history_stat_str));
+            }
+        }
+    }
+    //Draw the List, or the Radar/Dolphin View.
     if(item_count > 0) {
         // Draw received items list
         size_t shift_position = model->list_offset;
@@ -258,15 +299,49 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
                 }
             }
 
+            // Static guide circles (very faint)
+            for(int angle = 0; angle < 360; angle += 45) {
+                float rad = angle * 3.14159 / 180.0;
+                canvas_draw_dot(canvas, center_x + 15 * cosf(rad), center_y + 15 * sinf(rad));
+            }
+
             // Rotating sweep line with glow effect
             float sweep_angle = (model->animation_frame * 3.75) * 3.14159 / 180.0;
 
             // Main sweep line
-            int sweep_x = center_x + 12 * cosf(sweep_angle);
-            int sweep_y = center_y + 12 * sinf(sweep_angle);
-            int sweep_end_x = center_x + 20 * cosf(sweep_angle);
-            int sweep_end_y = center_y + 20 * sinf(sweep_angle);
-            canvas_draw_line(canvas, sweep_x, sweep_y, sweep_end_x, sweep_end_y);
+            int sweep_x = center_x + 22 * cosf(sweep_angle);
+            int sweep_y = center_y + 22 * sinf(sweep_angle);
+            canvas_draw_line(canvas, center_x, center_y, sweep_x, sweep_y);
+
+            // Sweep "glow" - additional lines at slight offsets
+            float glow_angle1 = sweep_angle - 0.05;
+            float glow_angle2 = sweep_angle + 0.05;
+            canvas_draw_line(
+                canvas,
+                center_x,
+                center_y,
+                center_x + 20 * cosf(glow_angle1),
+                center_y + 20 * sinf(glow_angle1));
+            canvas_draw_line(
+                canvas,
+                center_x,
+                center_y,
+                center_x + 20 * cosf(glow_angle2),
+                center_y + 20 * sinf(glow_angle2));
+
+            // Sweep trail (fading dots)
+            for(int i = 1; i <= 12; i++) {
+                float trail_angle = sweep_angle - (i * 0.15);
+                int trail_radius = 22 - i;
+                if(trail_radius > 0) {
+                    int trail_x = center_x + trail_radius * cosf(trail_angle);
+                    int trail_y = center_y + trail_radius * sinf(trail_angle);
+                    // Only draw every other dot in trail for fade effect
+                    if(i % 2 == 0 || i < 4) {
+                        canvas_draw_dot(canvas, trail_x, trail_y);
+                    }
+                }
+            }
 
             // Pulsing center
             int pulse = (model->animation_frame % 32);
@@ -278,10 +353,6 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
             if(pulse < 8 || (pulse > 16 && pulse < 24)) {
                 canvas_draw_dot(canvas, center_x, center_y);
             }
-
-            // Status bar separator
-            //canvas_set_color(canvas, ColorBlack);
-            //canvas_draw_line(canvas, 0, 48, 127, 48);
         } else {
             canvas_draw_icon(
                 canvas, 0, 0, model->external_radio ? &I_Fishing_123x52 : &I_Scanning_123x52);
@@ -304,33 +375,6 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
             const char* auto_save_text = "Save";
             canvas_draw_str(
                 canvas, 110 - canvas_string_width(canvas, auto_save_text), 7, auto_save_text);
-        }
-    }
-
-    // Draw RSSI
-    protopirate_view_rssi_draw(canvas, model);
-
-    //Draw To Unlock, Locked etc...
-    if(model->lock_count) {
-        canvas_draw_str(canvas, 44, 63, furi_string_get_cstr(model->frequency_str));
-        canvas_draw_str(canvas, 79, 63, furi_string_get_cstr(model->preset_str));
-        canvas_draw_str(canvas, 96, 63, furi_string_get_cstr(model->history_stat_str));
-        canvas_set_font(canvas, FontSecondary);
-        elements_bold_rounded_frame(canvas, 14, 8, 99, 48);
-        elements_multiline_text(canvas, 65, 26, "To unlock\npress:");
-        canvas_draw_icon(canvas, 65, 42, &I_Pin_back_arrow_10x8);
-        canvas_draw_icon(canvas, 80, 42, &I_Pin_back_arrow_10x8);
-        canvas_draw_icon(canvas, 95, 42, &I_Pin_back_arrow_10x8);
-        canvas_draw_icon(canvas, 16, 13, &I_WarningDolphin_45x42);
-        canvas_draw_dot(canvas, 17, 61);
-    } else {
-        if(model->lock == ProtoPirateLockOn) {
-            canvas_draw_icon(canvas, 64, 55, &I_Lock_7x8);
-            canvas_draw_str(canvas, 74, 62, "Locked");
-        } else {
-            canvas_draw_str(canvas, 44, 63, furi_string_get_cstr(model->frequency_str));
-            canvas_draw_str(canvas, 79, 63, furi_string_get_cstr(model->preset_str));
-            canvas_draw_str(canvas, 96, 63, furi_string_get_cstr(model->history_stat_str));
         }
     }
 

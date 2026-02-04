@@ -197,6 +197,9 @@ void protopirate_scene_receiver_on_enter(void* context) {
     // Update lock state in view
     protopirate_view_receiver_set_lock(app->protopirate_receiver, app->lock);
 
+    //Not in Sub Decode Mode
+    protopirate_view_receiver_set_sub_decode_mode(app->protopirate_receiver, false);
+
     // Switch to receiver view
     view_dispatcher_switch_to_view(app->view_dispatcher, ProtoPirateViewReceiver);
 }

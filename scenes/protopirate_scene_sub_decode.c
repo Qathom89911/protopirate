@@ -443,6 +443,8 @@ void protopirate_scene_sub_decode_on_enter(void* context) {
     g_decode_ctx->selected_history_index = 0;
     g_decode_ctx->raw_reader = NULL;
 
+    protopirate_view_receiver_set_sub_decode_mode(app->protopirate_receiver, true);
+
     FURI_LOG_I(TAG, "After context setup - Free heap: %zu", memmgr_get_free_heap());
 
     DialogsFileBrowserOptions browser_options;
