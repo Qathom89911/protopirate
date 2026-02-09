@@ -1,7 +1,6 @@
 // scenes/protopirate_scene_config.h
 
-//#define ENABLE_TIMING_TUNER_SCENE
-//#define ENABLE_SUB_DECODE_SCENE
+#include "../defines.h"
 
 ADD_SCENE(protopirate, start, Start)
 #ifdef ENABLE_SUB_DECODE_SCENE
@@ -13,7 +12,9 @@ ADD_SCENE(protopirate, receiver_config, ReceiverConfig)
 ADD_SCENE(protopirate, receiver_info, ReceiverInfo)
 ADD_SCENE(protopirate, saved, Saved)
 ADD_SCENE(protopirate, saved_info, SavedInfo)
+#ifdef ENABLE_EMULATE_FEATURE
 ADD_SCENE(protopirate, emulate, Emulate)
+#endif
 #ifdef ENABLE_TIMING_TUNER_SCENE
 ADD_SCENE(protopirate, timing_tuner, TimingTuner)
 #endif
