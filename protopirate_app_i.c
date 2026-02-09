@@ -87,6 +87,11 @@ void protopirate_begin(ProtoPirateApp* app, uint8_t* preset_data) {
 
 uint32_t protopirate_rx(ProtoPirateApp* app, uint32_t frequency) {
     furi_assert(app);
+    furi_assert(app->txrx);
+    furi_assert(app->radio_initialized);
+    furi_assert(app->txrx->radio_device);
+    furi_assert(app->txrx->worker);
+
     if(!subghz_devices_is_frequency_valid(app->txrx->radio_device, frequency)) {
         furi_crash("ProtoPirate: Incorrect RX frequency.");
     }
