@@ -23,6 +23,7 @@ struct ProtoPirateHistory {
 
 ProtoPirateHistory* protopirate_history_alloc(void) {
     ProtoPirateHistory* instance = malloc(sizeof(ProtoPirateHistory));
+    furi_assert(instance);
     ProtoPirateHistoryItemArray_init(instance->data);
     instance->last_index = 0;
     instance->last_update_timestamp = 0;
