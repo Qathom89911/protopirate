@@ -323,6 +323,10 @@ bool protopirate_storage_save_capture(
     FlipperFormat* flipper_format,
     const char* protocol_name,
     FuriString* out_path) {
+    furi_check(flipper_format);
+    furi_check(protocol_name);
+    furi_check(out_path);
+
     if(!protopirate_storage_init()) {
         FURI_LOG_E(TAG, "Failed to create app folder");
         return false;
