@@ -25,6 +25,8 @@ ProtoPirateHistory* protopirate_history_alloc(void) {
     ProtoPirateHistory* instance = malloc(sizeof(ProtoPirateHistory));
     ProtoPirateHistoryItemArray_init(instance->data);
     instance->last_index = 0;
+    instance->last_update_timestamp = 0;
+    instance->code_last_hash_data = 0;
     return instance;
 }
 
