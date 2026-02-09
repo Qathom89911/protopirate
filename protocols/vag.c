@@ -88,19 +88,12 @@ typedef struct SubGhzProtocolDecoderVAG {
     uint32_t data_low;
     uint32_t data_high;
     uint8_t bit_count;
-    uint32_t key1_low;
-    uint32_t key1_high;
-    uint32_t key2_low;
-    uint32_t key2_high;
     uint16_t data_count_bit;
     uint8_t vag_type;
     uint16_t header_count;
     uint8_t mid_count;
     ManchesterState manchester_state;
 
-    uint32_t serial;
-    uint32_t cnt;
-    uint8_t btn;
     uint8_t check_byte;
     uint8_t key_idx;
     bool decrypted;
@@ -175,12 +168,12 @@ static void vag_fill_from_decrypted(
     uint8_t dispatch_byte) {
     uint32_t serial_raw = (uint32_t)dec[0] | ((uint32_t)dec[1] << 8) | ((uint32_t)dec[2] << 16) |
                           ((uint32_t)dec[3] << 24);
-    instance->serial = (serial_raw << 24) | ((serial_raw & 0xFF00) << 8) |
-                       ((serial_raw >> 8) & 0xFF00) | (serial_raw >> 24);
+    instance->generic.serial = (serial_raw << 24) | ((serial_raw & 0xFF00) << 8) |
+                               ((serial_raw >> 8) & 0xFF00) | (serial_raw >> 24);
 
-    instance->cnt = (uint32_t)dec[4] | ((uint32_t)dec[5] << 8) | ((uint32_t)dec[6] << 16);
+    instance->generic.cnt = (uint32_t)dec[4] | ((uint32_t)dec[5] << 8) | ((uint32_t)dec[6] << 16);
 
-    instance->btn = (dec[7] >> 4) & 0xF;
+    instance->generic.btn = (dec[7] >> 4) & 0xF;
     instance->check_byte = dispatch_byte;
     instance->decrypted = true;
 }
@@ -199,12 +192,12 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
     furi_assert(instance);
 
     instance->decrypted = false;
-    instance->serial = 0;
-    instance->cnt = 0;
-    instance->btn = 0;
+    instance->generic.serial = 0;
+    instance->generic.cnt = 0;
+    instance->generic.btn = 0;
 
-    uint8_t dispatch_byte = (uint8_t)(instance->key2_low & 0xFF);
-    uint8_t key2_high = (uint8_t)((instance->key2_low >> 8) & 0xFF);
+    uint8_t dispatch_byte = (uint8_t)(instance->generic.data_2 & 0xFF);
+    uint8_t key2_high = (uint8_t)((instance->generic.data_2 >> 8) & 0xFF);
 
     FURI_LOG_I(
         TAG,
@@ -214,17 +207,16 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
         (dispatch_byte >> 4) & 0xF);
 
     uint8_t key1_bytes[8];
-    uint32_t key1_low = instance->key1_low;
-    uint32_t key1_high = instance->key1_high;
+    uint64_t key1 = instance->generic.data;
 
-    key1_bytes[0] = (uint8_t)(key1_high >> 24);
-    key1_bytes[1] = (uint8_t)(key1_high >> 16);
-    key1_bytes[2] = (uint8_t)(key1_high >> 8);
-    key1_bytes[3] = (uint8_t)(key1_high);
-    key1_bytes[4] = (uint8_t)(key1_low >> 24);
-    key1_bytes[5] = (uint8_t)(key1_low >> 16);
-    key1_bytes[6] = (uint8_t)(key1_low >> 8);
-    key1_bytes[7] = (uint8_t)(key1_low);
+    key1_bytes[0] = (uint8_t)(key1 >> 56);
+    key1_bytes[1] = (uint8_t)(key1 >> 48);
+    key1_bytes[2] = (uint8_t)(key1 >> 40);
+    key1_bytes[3] = (uint8_t)(key1 >> 32);
+    key1_bytes[4] = (uint8_t)(key1 >> 24);
+    key1_bytes[5] = (uint8_t)(key1 >> 16);
+    key1_bytes[6] = (uint8_t)(key1 >> 8);
+    key1_bytes[7] = (uint8_t)(key1);
 
     uint8_t type_byte = key1_bytes[0];
 
@@ -267,12 +259,13 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
                 }
 
                 if(vag_button_valid(block_copy)) {
-                    instance->serial = ((uint32_t)block_copy[0] << 24) |
-                                       ((uint32_t)block_copy[1] << 16) |
-                                       ((uint32_t)block_copy[2] << 8) | (uint32_t)block_copy[3];
-                    instance->cnt = (uint32_t)block_copy[4] | ((uint32_t)block_copy[5] << 8) |
-                                    ((uint32_t)block_copy[6] << 16);
-                    instance->btn = block_copy[7];
+                    instance->generic.serial =
+                        ((uint32_t)block_copy[0] << 24) | ((uint32_t)block_copy[1] << 16) |
+                        ((uint32_t)block_copy[2] << 8) | (uint32_t)block_copy[3];
+                    instance->generic.cnt = (uint32_t)block_copy[4] |
+                                            ((uint32_t)block_copy[5] << 8) |
+                                            ((uint32_t)block_copy[6] << 16);
+                    instance->generic.btn = block_copy[7];
                     instance->check_byte = dispatch_byte;
                     instance->key_idx = key_idx;
                     instance->decrypted = true;
@@ -280,9 +273,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
                         TAG,
                         "Type 1 key%d decoded: Ser=%08lX Cnt=%06lX Btn=%02X",
                         key_idx,
-                        (unsigned long)instance->serial,
-                        (unsigned long)instance->cnt,
-                        instance->btn);
+                        (unsigned long)instance->generic.serial,
+                        (unsigned long)instance->generic.cnt,
+                        instance->generic.btn);
                     return;
                 }
             }
@@ -336,9 +329,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
                 FURI_LOG_I(
                     TAG,
                     "Type 2 XTEA decoded: Ser=%08lX Cnt=%06lX Btn=%d",
-                    (unsigned long)instance->serial,
-                    (unsigned long)instance->cnt,
-                    instance->btn);
+                    (unsigned long)instance->generic.serial,
+                    (unsigned long)instance->generic.cnt,
+                    instance->generic.btn);
                 return;
             }
         }
@@ -355,9 +348,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
             FURI_LOG_I(
                 TAG,
                 "Type 3->4 key2 decoded: Ser=%08lX Cnt=%06lX Btn=%d",
-                (unsigned long)instance->serial,
-                (unsigned long)instance->cnt,
-                instance->btn);
+                (unsigned long)instance->generic.serial,
+                (unsigned long)instance->generic.cnt,
+                instance->generic.btn);
             return;
         }
 
@@ -368,9 +361,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
             FURI_LOG_I(
                 TAG,
                 "Type 3 key1 decoded: Ser=%08lX Cnt=%06lX Btn=%d",
-                (unsigned long)instance->serial,
-                (unsigned long)instance->cnt,
-                instance->btn);
+                (unsigned long)instance->generic.serial,
+                (unsigned long)instance->generic.cnt,
+                instance->generic.btn);
             return;
         }
 
@@ -381,9 +374,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
             FURI_LOG_I(
                 TAG,
                 "Type 3 key0 decoded: Ser=%08lX Cnt=%06lX Btn=%d",
-                (unsigned long)instance->serial,
-                (unsigned long)instance->cnt,
-                instance->btn);
+                (unsigned long)instance->generic.serial,
+                (unsigned long)instance->generic.cnt,
+                instance->generic.btn);
             return;
         }
 
@@ -420,9 +413,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
             FURI_LOG_I(
                 TAG,
                 "Type 4 decoded: Ser=%08lX Cnt=%06lX Btn=%d",
-                (unsigned long)instance->serial,
-                (unsigned long)instance->cnt,
-                instance->btn);
+                (unsigned long)instance->generic.serial,
+                (unsigned long)instance->generic.cnt,
+                instance->generic.btn);
         }
         return;
 
@@ -432,9 +425,9 @@ static void vag_parse_data(SubGhzProtocolDecoderVAG* instance) {
     }
 
     instance->decrypted = false;
-    instance->serial = 0;
-    instance->cnt = 0;
-    instance->btn = 0;
+    instance->generic.serial = 0;
+    instance->generic.cnt = 0;
+    instance->generic.btn = 0;
     instance->check_byte = 0;
     FURI_LOG_W(TAG, "VAG decryption failed for type %d", instance->vag_type);
 }
@@ -473,9 +466,9 @@ void* subghz_protocol_decoder_vag_alloc(SubGhzEnvironment* environment) {
     instance->base.protocol = &vag_protocol;
     instance->generic.protocol_name = instance->base.protocol->name;
     instance->decrypted = false;
-    instance->serial = 0;
-    instance->cnt = 0;
-    instance->btn = 0;
+    instance->generic.serial = 0;
+    instance->generic.cnt = 0;
+    instance->generic.btn = 0;
     instance->check_byte = 0;
     instance->key_idx = 0xFF;
 
@@ -495,9 +488,9 @@ void subghz_protocol_decoder_vag_reset(void* context) {
     SubGhzProtocolDecoderVAG* instance = context;
     instance->parser_step = VAGDecoderStepReset;
     instance->decrypted = false;
-    instance->serial = 0;
-    instance->cnt = 0;
-    instance->btn = 0;
+    instance->generic.serial = 0;
+    instance->generic.cnt = 0;
+    instance->generic.btn = 0;
     instance->check_byte = 0;
     instance->key_idx = 0xFF;
 }
@@ -652,8 +645,8 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
                         instance->vag_type = 2;
                     }
                 } else if(instance->bit_count == 64) {
-                    instance->key1_low = ~instance->data_low;
-                    instance->key1_high = ~instance->data_high;
+                    instance->generic.data =
+                        ~(((uint64_t)instance->data_high << 32) | instance->data_low);
                     instance->data_low = 0;
                     instance->data_high = 0;
                 }
@@ -674,15 +667,13 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
             return;
         }
         if(instance->bit_count == 80) {
-            instance->key2_low = (~instance->data_low) & 0xFFFF;
-            instance->key2_high = 0;
+            instance->generic.data_2 = (~instance->data_low) & 0xFFFF;
             instance->data_count_bit = 80;
             FURI_LOG_I(
                 TAG,
-                "VAG decoded: Key1:%08lX%08lX Key2:%04X Type:%d",
-                (unsigned long)instance->key1_high,
-                (unsigned long)instance->key1_low,
-                (unsigned int)(instance->key2_low & 0xFFFF),
+                "VAG decoded: Key1:%016llX Key2:%04llX Type:%d",
+                (unsigned long long)instance->generic.data,
+                (unsigned long long)(instance->generic.data_2 & 0xFFFF),
                 instance->vag_type);
 
             vag_parse_data(instance);
@@ -842,8 +833,8 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
             instance->bit_count++;
 
             if(instance->bit_count == 64) {
-                instance->key1_low = instance->data_low;
-                instance->key1_high = instance->data_high;
+                instance->generic.data = ((uint64_t)instance->data_high << 32) |
+                                         instance->data_low;
                 instance->data_low = 0;
                 instance->data_high = 0;
             }
@@ -853,16 +844,14 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
         if(instance->bit_count != 80) {
             break;
         }
-        instance->key2_low = instance->data_low & 0xFFFF;
-        instance->key2_high = 0;
+        instance->generic.data_2 = instance->data_low & 0xFFFF;
         instance->data_count_bit = 80;
         instance->vag_type = 3;
         FURI_LOG_I(
             TAG,
-            "VAG decoded: Key1:%08lX%08lX Key2:%04X Type:%d",
-            (unsigned long)instance->key1_high,
-            (unsigned long)instance->key1_low,
-            (unsigned int)(instance->key2_low & 0xFFFF),
+            "VAG decoded: Key1:%016llX Key2:%04llX Type:%d",
+            (unsigned long long)instance->generic.data,
+            (unsigned long long)(instance->generic.data_2 & 0xFFFF),
             instance->vag_type);
 
         vag_parse_data(instance);
@@ -886,14 +875,14 @@ uint8_t subghz_protocol_decoder_vag_get_hash_data(void* context) {
     furi_assert(context);
     SubGhzProtocolDecoderVAG* instance = context;
     uint8_t hash = 0;
-    hash ^= (instance->key1_low & 0xFF);
-    hash ^= ((instance->key1_low >> 8) & 0xFF);
-    hash ^= ((instance->key1_low >> 16) & 0xFF);
-    hash ^= ((instance->key1_low >> 24) & 0xFF);
-    hash ^= (instance->key1_high & 0xFF);
-    hash ^= ((instance->key1_high >> 8) & 0xFF);
-    hash ^= ((instance->key1_high >> 16) & 0xFF);
-    hash ^= ((instance->key1_high >> 24) & 0xFF);
+    hash ^= (instance->generic.data & 0xFF);
+    hash ^= ((instance->generic.data >> 8) & 0xFF);
+    hash ^= ((instance->generic.data >> 16) & 0xFF);
+    hash ^= ((instance->generic.data >> 24) & 0xFF);
+    hash ^= ((instance->generic.data >> 32) & 0xFF);
+    hash ^= ((instance->generic.data >> 40) & 0xFF);
+    hash ^= ((instance->generic.data >> 48) & 0xFF);
+    hash ^= ((instance->generic.data >> 56) & 0xFF);
     return hash;
 }
 
@@ -909,9 +898,9 @@ SubGhzProtocolStatus subghz_protocol_decoder_vag_serialize(
         TAG,
         "Before parse: decrypted=%d serial=%08lX cnt=%06lX btn=%02X type=%d",
         instance->decrypted,
-        (unsigned long)instance->serial,
-        (unsigned long)instance->cnt,
-        instance->btn,
+        (unsigned long)instance->generic.serial,
+        (unsigned long)instance->generic.cnt,
+        instance->generic.btn,
         instance->vag_type);
 
     if(!instance->decrypted && instance->data_count_bit >= 80) {
@@ -923,29 +912,22 @@ SubGhzProtocolStatus subghz_protocol_decoder_vag_serialize(
         TAG,
         "After parse: decrypted=%d serial=%08lX cnt=%06lX btn=%02X type=%d",
         instance->decrypted,
-        (unsigned long)instance->serial,
-        (unsigned long)instance->cnt,
-        instance->btn,
+        (unsigned long)instance->generic.serial,
+        (unsigned long)instance->generic.cnt,
+        instance->generic.btn,
         instance->vag_type);
 
-    uint64_t key1 = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
-    uint16_t key2_16bit = (uint16_t)(instance->key2_low & 0xFFFF);
+    uint16_t key2_16bit = (uint16_t)(instance->generic.data_2 & 0xFFFF);
 
     FURI_LOG_I(
         TAG,
-        "Keys: Key1=%08lX%08lX Key2=%08lX%08lX",
-        (unsigned long)instance->key1_high,
-        (unsigned long)instance->key1_low,
-        (unsigned long)instance->key2_high,
-        (unsigned long)instance->key2_low);
+        "Keys: Key1=%016llX Key2=%04llX",
+        (unsigned long long)instance->generic.data,
+        (unsigned long long)instance->generic.data_2);
 
-    instance->generic.data = key1;
     instance->generic.data_count_bit = instance->data_count_bit;
 
     if(instance->decrypted) {
-        instance->generic.serial = instance->serial;
-        instance->generic.cnt = instance->cnt;
-        instance->generic.btn = instance->btn;
         FURI_LOG_I(TAG, "Decrypted - setting generic fields for serialize");
     } else {
         FURI_LOG_W(TAG, "NOT decrypted - Serial/Cnt/Btn will be 0 in saved file!");
@@ -968,15 +950,15 @@ SubGhzProtocolStatus subghz_protocol_decoder_vag_serialize(
         FURI_LOG_I(TAG, "Wrote Type: %d", instance->vag_type);
 
         if(instance->decrypted) {
-            flipper_format_write_uint32(flipper_format, "Serial", &instance->serial, 1);
-            FURI_LOG_I(TAG, "Wrote Serial: %08lX", (unsigned long)instance->serial);
+            flipper_format_write_uint32(flipper_format, "Serial", &instance->generic.serial, 1);
+            FURI_LOG_I(TAG, "Wrote Serial: %08lX", (unsigned long)instance->generic.serial);
 
-            uint32_t btn_temp = instance->btn;
+            uint32_t btn_temp = instance->generic.btn;
             flipper_format_write_uint32(flipper_format, "Btn", &btn_temp, 1);
-            FURI_LOG_I(TAG, "Wrote Btn: %02X", instance->btn);
+            FURI_LOG_I(TAG, "Wrote Btn: %02X", instance->generic.btn);
 
-            flipper_format_write_uint32(flipper_format, "Cnt", &instance->cnt, 1);
-            FURI_LOG_I(TAG, "Wrote Cnt: %06lX", (unsigned long)instance->cnt);
+            flipper_format_write_uint32(flipper_format, "Cnt", &instance->generic.cnt, 1);
+            FURI_LOG_I(TAG, "Wrote Cnt: %06lX", (unsigned long)instance->generic.cnt);
 
             uint32_t key_idx_temp = instance->key_idx;
             flipper_format_write_uint32(flipper_format, "KeyIdx", &key_idx_temp, 1);
@@ -997,16 +979,11 @@ SubGhzProtocolStatus
         &instance->generic, flipper_format, subghz_protocol_vag_const.min_count_bit_for_found);
 
     if(ret == SubGhzProtocolStatusOk) {
-        uint64_t key1 = instance->generic.data;
-        instance->key1_low = (uint32_t)key1;
-        instance->key1_high = (uint32_t)(key1 >> 32);
-
         uint8_t key2_bytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         flipper_format_rewind(flipper_format);
         if(flipper_format_read_hex(flipper_format, "Key2", key2_bytes, 8)) {
             uint16_t key2_16bit = ((uint16_t)key2_bytes[6] << 8) | (uint16_t)key2_bytes[7];
-            instance->key2_low = (uint32_t)key2_16bit & 0xFFFF;
-            instance->key2_high = 0;
+            instance->generic.data_2 = (uint64_t)(key2_16bit & 0xFFFF);
             FURI_LOG_D(
                 TAG,
                 "Read Key2 from file: bytes[6]=0x%02X bytes[7]=0x%02X normalized=0x%04X",
@@ -1034,14 +1011,7 @@ typedef struct SubGhzProtocolEncoderVAG {
     SubGhzProtocolEncoderBase base;
     SubGhzBlockGeneric generic;
 
-    uint32_t key1_low;
-    uint32_t key1_high;
-    uint32_t key2_low;
-    uint32_t key2_high;
-    uint32_t serial;
-    uint32_t cnt;
     uint8_t vag_type;
-    uint8_t btn;
     uint8_t dispatch_byte;
     uint8_t key_idx;
 
@@ -1117,23 +1087,24 @@ static void vag_encoder_build_type1(SubGhzProtocolEncoderVAG* instance) {
     size_t index = 0;
     LevelDuration* upload = instance->upload;
 
-    uint8_t btn_byte = vag_btn_to_byte(instance->btn, 1);
+    uint8_t btn_byte = vag_btn_to_byte(instance->generic.btn, 1);
     uint8_t dispatch = vag_get_dispatch_byte(btn_byte, 1);
     instance->dispatch_byte = dispatch;
 
-    FURI_LOG_D(TAG, "btn=%02X -> btn_byte=%02X, dispatch=%02X", instance->btn, btn_byte, dispatch);
+    FURI_LOG_D(
+        TAG, "btn=%02X -> btn_byte=%02X, dispatch=%02X", instance->generic.btn, btn_byte, dispatch);
 
     uint8_t block[8];
-    uint8_t type_byte = (uint8_t)(instance->key1_high >> 24);
+    uint8_t type_byte = (uint8_t)(instance->generic.data >> 56);
 
-    block[0] = (uint8_t)(instance->serial >> 24);
-    block[1] = (uint8_t)(instance->serial >> 16);
-    block[2] = (uint8_t)(instance->serial >> 8);
-    block[3] = (uint8_t)(instance->serial);
+    block[0] = (uint8_t)(instance->generic.serial >> 24);
+    block[1] = (uint8_t)(instance->generic.serial >> 16);
+    block[2] = (uint8_t)(instance->generic.serial >> 8);
+    block[3] = (uint8_t)(instance->generic.serial);
 
-    block[4] = (uint8_t)(instance->cnt);
-    block[5] = (uint8_t)(instance->cnt >> 8);
-    block[6] = (uint8_t)(instance->cnt >> 16);
+    block[4] = (uint8_t)(instance->generic.cnt);
+    block[5] = (uint8_t)(instance->generic.cnt >> 8);
+    block[6] = (uint8_t)(instance->generic.cnt >> 16);
 
     block[7] = btn_byte;
 
@@ -1148,8 +1119,8 @@ static void vag_encoder_build_type1(SubGhzProtocolEncoderVAG* instance) {
         block[5],
         block[6],
         block[7],
-        (unsigned long)instance->serial,
-        (unsigned long)instance->cnt,
+        (unsigned long)instance->generic.serial,
+        (unsigned long)instance->generic.cnt,
         btn_byte);
 
     int key_idx = (instance->key_idx != 0xFF) ? instance->key_idx : 0;
@@ -1173,14 +1144,13 @@ static void vag_encoder_build_type1(SubGhzProtocolEncoderVAG* instance) {
         block[6],
         block[7]);
 
-    instance->key1_high = ((uint32_t)type_byte << 24) | ((uint32_t)block[0] << 16) |
-                          ((uint32_t)block[1] << 8) | (uint32_t)block[2];
-    instance->key1_low = ((uint32_t)block[3] << 24) | ((uint32_t)block[4] << 16) |
-                         ((uint32_t)block[5] << 8) | (uint32_t)block[6];
+    instance->generic.data = ((uint64_t)type_byte << 56) | ((uint64_t)block[0] << 48) |
+                             ((uint64_t)block[1] << 40) | ((uint64_t)block[2] << 32) |
+                             ((uint64_t)block[3] << 24) | ((uint64_t)block[4] << 16) |
+                             ((uint64_t)block[5] << 8) | (uint64_t)block[6];
     uint32_t key2_upper = ((uint32_t)(block[7] & 0xFF) << 8);
     uint32_t key2_lower = (uint32_t)(dispatch & 0xFF);
-    instance->key2_low = (key2_upper | key2_lower) & 0xFFFF;
-    instance->key2_high = 0;
+    instance->generic.data_2 = (uint64_t)((key2_upper | key2_lower) & 0xFFFF);
 
     for(int i = 0; i < 220; i++) {
         upload[index++] = level_duration_make(true, 300);
@@ -1205,15 +1175,13 @@ static void vag_encoder_build_type1(SubGhzProtocolEncoderVAG* instance) {
     }
     FURI_LOG_D(TAG, "Prefix 0x%04X: %zu pulses", prefix, index - prefix_start);
 
-    uint64_t key1 = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
+    uint64_t key1 = instance->generic.data;
     uint64_t key1_inv = ~key1;
     FURI_LOG_D(
         TAG,
-        "Key1: %08lX%08lX -> inverted: %08lX%08lX",
-        (unsigned long)(key1 >> 32),
-        (unsigned long)(key1 & 0xFFFFFFFF),
-        (unsigned long)(key1_inv >> 32),
-        (unsigned long)(key1_inv & 0xFFFFFFFF));
+        "Key1: %016llX -> inverted: %016llX",
+        (unsigned long long)key1,
+        (unsigned long long)key1_inv);
 
     size_t key1_start = index;
     for(int i = 63; i >= 0; i--) {
@@ -1228,7 +1196,7 @@ static void vag_encoder_build_type1(SubGhzProtocolEncoderVAG* instance) {
     }
     FURI_LOG_D(TAG, "Key1: %zu pulses (64 bits)", index - key1_start);
 
-    uint16_t key2 = (uint16_t)(instance->key2_low & 0xFFFF);
+    uint16_t key2 = (uint16_t)(instance->generic.data_2 & 0xFFFF);
     uint16_t key2_inv = ~key2;
     FURI_LOG_D(TAG, "Key2: %04X -> inverted: %04X", key2, key2_inv);
 
@@ -1261,23 +1229,24 @@ static void vag_encoder_build_type2(SubGhzProtocolEncoderVAG* instance) {
     size_t index = 0;
     LevelDuration* upload = instance->upload;
 
-    uint8_t btn_byte = vag_btn_to_byte(instance->btn, 2);
+    uint8_t btn_byte = vag_btn_to_byte(instance->generic.btn, 2);
     uint8_t dispatch = vag_get_dispatch_byte(btn_byte, 2);
     instance->dispatch_byte = dispatch;
 
-    FURI_LOG_D(TAG, "btn=%02X -> btn_byte=%02X, dispatch=%02X", instance->btn, btn_byte, dispatch);
+    FURI_LOG_D(
+        TAG, "btn=%02X -> btn_byte=%02X, dispatch=%02X", instance->generic.btn, btn_byte, dispatch);
 
-    uint8_t type_byte = (uint8_t)(instance->key1_high >> 24);
+    uint8_t type_byte = (uint8_t)(instance->generic.data >> 56);
 
     uint8_t block[8];
-    block[0] = (uint8_t)(instance->serial >> 24);
-    block[1] = (uint8_t)(instance->serial >> 16);
-    block[2] = (uint8_t)(instance->serial >> 8);
-    block[3] = (uint8_t)(instance->serial);
+    block[0] = (uint8_t)(instance->generic.serial >> 24);
+    block[1] = (uint8_t)(instance->generic.serial >> 16);
+    block[2] = (uint8_t)(instance->generic.serial >> 8);
+    block[3] = (uint8_t)(instance->generic.serial);
 
-    block[4] = (uint8_t)(instance->cnt);
-    block[5] = (uint8_t)(instance->cnt >> 8);
-    block[6] = (uint8_t)(instance->cnt >> 16);
+    block[4] = (uint8_t)(instance->generic.cnt);
+    block[5] = (uint8_t)(instance->generic.cnt >> 8);
+    block[6] = (uint8_t)(instance->generic.cnt >> 16);
 
     block[7] = btn_byte;
 
@@ -1292,8 +1261,8 @@ static void vag_encoder_build_type2(SubGhzProtocolEncoderVAG* instance) {
         block[5],
         block[6],
         block[7],
-        (unsigned long)instance->serial,
-        (unsigned long)instance->cnt,
+        (unsigned long)instance->generic.serial,
+        (unsigned long)instance->generic.cnt,
         btn_byte);
 
     uint32_t v0 = ((uint32_t)block[0] << 24) | ((uint32_t)block[1] << 16) |
@@ -1328,14 +1297,13 @@ static void vag_encoder_build_type2(SubGhzProtocolEncoderVAG* instance) {
         block[6],
         block[7]);
 
-    instance->key1_high = ((uint32_t)type_byte << 24) | ((uint32_t)block[0] << 16) |
-                          ((uint32_t)block[1] << 8) | (uint32_t)block[2];
-    instance->key1_low = ((uint32_t)block[3] << 24) | ((uint32_t)block[4] << 16) |
-                         ((uint32_t)block[5] << 8) | (uint32_t)block[6];
+    instance->generic.data = ((uint64_t)type_byte << 56) | ((uint64_t)block[0] << 48) |
+                             ((uint64_t)block[1] << 40) | ((uint64_t)block[2] << 32) |
+                             ((uint64_t)block[3] << 24) | ((uint64_t)block[4] << 16) |
+                             ((uint64_t)block[5] << 8) | (uint64_t)block[6];
     uint32_t key2_upper = ((uint32_t)(block[7] & 0xFF) << 8);
     uint32_t key2_lower = (uint32_t)(dispatch & 0xFF);
-    instance->key2_low = (key2_upper | key2_lower) & 0xFFFF;
-    instance->key2_high = 0;
+    instance->generic.data_2 = (uint64_t)((key2_upper | key2_lower) & 0xFFFF);
 
     for(int i = 0; i < 220; i++) {
         upload[index++] = level_duration_make(true, 300);
@@ -1360,15 +1328,13 @@ static void vag_encoder_build_type2(SubGhzProtocolEncoderVAG* instance) {
     }
     FURI_LOG_D(TAG, "Prefix 0x%04X: %zu pulses", prefix, index - prefix_start);
 
-    uint64_t key1 = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
+    uint64_t key1 = instance->generic.data;
     uint64_t key1_inv = ~key1;
     FURI_LOG_D(
         TAG,
-        "Key1: %08lX%08lX -> inverted: %08lX%08lX",
-        (unsigned long)(key1 >> 32),
-        (unsigned long)(key1 & 0xFFFFFFFF),
-        (unsigned long)(key1_inv >> 32),
-        (unsigned long)(key1_inv & 0xFFFFFFFF));
+        "Key1: %016llX -> inverted: %016llX",
+        (unsigned long long)key1,
+        (unsigned long long)key1_inv);
 
     size_t key1_start = index;
     for(int i = 63; i >= 0; i--) {
@@ -1383,7 +1349,7 @@ static void vag_encoder_build_type2(SubGhzProtocolEncoderVAG* instance) {
     }
     FURI_LOG_D(TAG, "Key1: %zu pulses", index - key1_start);
 
-    uint16_t key2 = (uint16_t)(instance->key2_low & 0xFFFF);
+    uint16_t key2 = (uint16_t)(instance->generic.data_2 & 0xFFFF);
     uint16_t key2_inv = ~key2;
     FURI_LOG_D(TAG, "Key2: %04X -> inverted: %04X", key2, key2_inv);
 
@@ -1412,22 +1378,23 @@ static void vag_encoder_build_type3_4(SubGhzProtocolEncoderVAG* instance) {
     size_t index = 0;
     LevelDuration* upload = instance->upload;
 
-    uint8_t btn_byte = vag_btn_to_byte(instance->btn, instance->vag_type);
+    uint8_t btn_byte = vag_btn_to_byte(instance->generic.btn, instance->vag_type);
     uint8_t dispatch = vag_get_dispatch_byte(btn_byte, instance->vag_type);
     instance->dispatch_byte = dispatch;
 
-    FURI_LOG_D(TAG, "btn=%02X -> btn_byte=%02X, dispatch=%02X", instance->btn, btn_byte, dispatch);
+    FURI_LOG_D(
+        TAG, "btn=%02X -> btn_byte=%02X, dispatch=%02X", instance->generic.btn, btn_byte, dispatch);
 
-    uint8_t type_byte = (uint8_t)(instance->key1_high >> 24);
+    uint8_t type_byte = (uint8_t)(instance->generic.data >> 56);
 
     uint8_t block[8];
-    block[0] = (uint8_t)(instance->serial >> 24);
-    block[1] = (uint8_t)(instance->serial >> 16);
-    block[2] = (uint8_t)(instance->serial >> 8);
-    block[3] = (uint8_t)(instance->serial);
-    block[4] = (uint8_t)(instance->cnt);
-    block[5] = (uint8_t)(instance->cnt >> 8);
-    block[6] = (uint8_t)(instance->cnt >> 16);
+    block[0] = (uint8_t)(instance->generic.serial >> 24);
+    block[1] = (uint8_t)(instance->generic.serial >> 16);
+    block[2] = (uint8_t)(instance->generic.serial >> 8);
+    block[3] = (uint8_t)(instance->generic.serial);
+    block[4] = (uint8_t)(instance->generic.cnt);
+    block[5] = (uint8_t)(instance->generic.cnt >> 8);
+    block[6] = (uint8_t)(instance->generic.cnt >> 16);
     block[7] = btn_byte;
 
     FURI_LOG_I(
@@ -1441,8 +1408,8 @@ static void vag_encoder_build_type3_4(SubGhzProtocolEncoderVAG* instance) {
         block[5],
         block[6],
         block[7],
-        (unsigned long)instance->serial,
-        (unsigned long)instance->cnt,
+        (unsigned long)instance->generic.serial,
+        (unsigned long)instance->generic.cnt,
         btn_byte);
 
     int key_idx;
@@ -1471,22 +1438,17 @@ static void vag_encoder_build_type3_4(SubGhzProtocolEncoderVAG* instance) {
         block[6],
         block[7]);
 
-    instance->key1_high = ((uint32_t)type_byte << 24) | ((uint32_t)block[0] << 16) |
-                          ((uint32_t)block[1] << 8) | (uint32_t)block[2];
-    instance->key1_low = ((uint32_t)block[3] << 24) | ((uint32_t)block[4] << 16) |
-                         ((uint32_t)block[5] << 8) | (uint32_t)block[6];
+    instance->generic.data = ((uint64_t)type_byte << 56) | ((uint64_t)block[0] << 48) |
+                             ((uint64_t)block[1] << 40) | ((uint64_t)block[2] << 32) |
+                             ((uint64_t)block[3] << 24) | ((uint64_t)block[4] << 16) |
+                             ((uint64_t)block[5] << 8) | (uint64_t)block[6];
     uint32_t key2_upper = ((uint32_t)(block[7] & 0xFF) << 8);
     uint32_t key2_lower = (uint32_t)(dispatch & 0xFF);
-    instance->key2_low = (key2_upper | key2_lower) & 0xFFFF;
-    instance->key2_high = 0;
+    instance->generic.data_2 = (uint64_t)((key2_upper | key2_lower) & 0xFFFF);
 
-    uint64_t key1 = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
-    uint16_t key2 = (uint16_t)(instance->key2_low & 0xFFFF);
-    FURI_LOG_D(
-        TAG,
-        "Key1: %08lX%08lX (NOT inverted for Type 3/4)",
-        (unsigned long)(key1 >> 32),
-        (unsigned long)(key1 & 0xFFFFFFFF));
+    uint64_t key1 = instance->generic.data;
+    uint16_t key2 = (uint16_t)(instance->generic.data_2 & 0xFFFF);
+    FURI_LOG_D(TAG, "Key1: %016llX (NOT inverted for Type 3/4)", (unsigned long long)key1);
     FURI_LOG_D(TAG, "Key2: %04X (NOT inverted for Type 3/4)", key2);
 
     uint8_t key1_byte6 = (key1 >> 8) & 0xFF;
@@ -1608,10 +1570,10 @@ void subghz_protocol_decoder_vag_get_string(void* context, FuriString* output) {
         vag_parse_data(instance);
     }
 
-    uint64_t key1 = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
-    uint16_t key2 = (uint16_t)(instance->key2_low & 0xFFFF);
+    uint64_t key1 = instance->generic.data;
+    uint16_t key2 = (uint16_t)(instance->generic.data_2 & 0xFFFF);
 
-    uint8_t type_byte = (uint8_t)(instance->key1_high >> 24);
+    uint8_t type_byte = (uint8_t)(instance->generic.data >> 56);
     const char* vehicle_name;
     switch(type_byte) {
     case 0x00:
@@ -1638,28 +1600,26 @@ void subghz_protocol_decoder_vag_get_string(void* context, FuriString* output) {
         furi_string_cat_printf(
             output,
             "%s %dbit\r\n"
-            "Key1:%08lX%08lX\r\n"
-            "Key2:%04X Btn:%s\r\n"
+            "Key1:%016llX\r\n"
+            "Key2:%04llX Btn:%s\r\n"
             "Ser:%08lX Cnt:%06lX\r\n",
             vehicle_name,
             instance->data_count_bit,
-            (unsigned long)(key1 >> 32),
-            (unsigned long)(key1 & 0xFFFFFFFF),
-            key2,
-            vag_button_name(instance->btn),
-            (unsigned long)instance->serial,
-            (unsigned long)instance->cnt);
+            (unsigned long long)key1,
+            (unsigned long long)key2,
+            vag_button_name(instance->generic.btn),
+            (unsigned long)instance->generic.serial,
+            (unsigned long)instance->generic.cnt);
     } else {
         furi_string_cat_printf(
             output,
             "%s %dbit\r\n"
-            "Key1:%08lX%08lX\r\n"
-            "Key2:%04X (corrupted)\r\n",
+            "Key1:%016llX\r\n"
+            "Key2:%04llX (corrupted)\r\n",
             vehicle_name,
             instance->data_count_bit,
-            (unsigned long)(key1 >> 32),
-            (unsigned long)(key1 & 0xFFFFFFFF),
-            key2);
+            (unsigned long long)key1,
+            (unsigned long long)key2);
     }
 }
 
@@ -1679,14 +1639,12 @@ void* subghz_protocol_encoder_vag_alloc(SubGhzEnvironment* environment) {
     instance->front = 0;
     instance->is_running = false;
 
-    instance->key1_low = 0;
-    instance->key1_high = 0;
-    instance->key2_low = 0;
-    instance->key2_high = 0;
-    instance->serial = 0;
-    instance->cnt = 0;
+    instance->generic.data = 0;
+    instance->generic.data_2 = 0;
+    instance->generic.serial = 0;
+    instance->generic.cnt = 0;
     instance->vag_type = 0;
-    instance->btn = 0;
+    instance->generic.btn = 0;
     instance->dispatch_byte = 0;
     instance->key_idx = 0xFF;
 
@@ -1751,14 +1709,8 @@ SubGhzProtocolStatus
             break;
         }
 
-        uint64_t key1 = instance->generic.data;
-        instance->key1_low = (uint32_t)key1;
-        instance->key1_high = (uint32_t)(key1 >> 32);
-        FURI_LOG_I(
-            TAG,
-            "Loaded Key1: %08lX%08lX",
-            (unsigned long)instance->key1_high,
-            (unsigned long)instance->key1_low);
+        instance->generic.data = instance->generic.data;
+        FURI_LOG_I(TAG, "Loaded Key1: %016llX", (unsigned long long)instance->generic.data);
 
         uint8_t key2_bytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         flipper_format_rewind(flipper_format);
@@ -1768,16 +1720,14 @@ SubGhzProtocolStatus
             break;
         }
         uint16_t key2_16bit = ((uint16_t)key2_bytes[6] << 8) | (uint16_t)key2_bytes[7];
-        instance->key2_low = (uint32_t)key2_16bit & 0xFFFF;
-        instance->key2_high = 0;
+        instance->generic.data_2 = (uint64_t)(key2_16bit & 0xFFFF);
         FURI_LOG_I(
             TAG,
-            "Loaded Key2: bytes[6]=0x%02X bytes[7]=0x%02X normalized=0x%04X (stored as %08lX%08lX)",
+            "Loaded Key2: bytes[6]=0x%02X bytes[7]=0x%02X normalized=0x%04X (stored as %016llX)",
             key2_bytes[6],
             key2_bytes[7],
             (unsigned int)key2_16bit,
-            (unsigned long)instance->key2_high,
-            (unsigned long)instance->key2_low);
+            (unsigned long long)instance->generic.data_2);
 
         uint32_t type = 0;
         flipper_format_rewind(flipper_format);
@@ -1821,17 +1771,17 @@ SubGhzProtocolStatus
             (unsigned long)instance->generic.cnt,
             instance->generic.btn);
 
-        instance->serial = has_serial ? file_serial : instance->generic.serial;
-        instance->cnt = has_cnt ? file_cnt : instance->generic.cnt;
-        instance->btn = has_btn ? (uint8_t)file_btn : instance->generic.btn;
+        instance->generic.serial = has_serial ? file_serial : instance->generic.serial;
+        instance->generic.cnt = has_cnt ? file_cnt : instance->generic.cnt;
+        instance->generic.btn = has_btn ? (uint8_t)file_btn : instance->generic.btn;
         instance->key_idx = has_key_idx ? (uint8_t)file_key_idx : 0xFF;
 
         FURI_LOG_I(
             TAG,
             "Final values: Ser=%08lX Cnt=%06lX Btn=%02X KeyIdx=%d",
-            (unsigned long)instance->serial,
-            (unsigned long)instance->cnt,
-            instance->btn,
+            (unsigned long)instance->generic.serial,
+            (unsigned long)instance->generic.cnt,
+            instance->generic.btn,
             instance->key_idx);
 
         if(instance->key_idx == 0xFF) {
@@ -1840,10 +1790,8 @@ SubGhzProtocolStatus
 
             SubGhzProtocolDecoderVAG decoder;
             memset(&decoder, 0, sizeof(decoder));
-            decoder.key1_low = instance->key1_low;
-            decoder.key1_high = instance->key1_high;
-            decoder.key2_low = instance->key2_low;
-            decoder.key2_high = instance->key2_high;
+            decoder.generic.data = instance->generic.data;
+            decoder.generic.data_2 = instance->generic.data_2;
             decoder.vag_type = instance->vag_type;
             decoder.data_count_bit = 80;
             decoder.key_idx = 0xFF;
@@ -1853,16 +1801,16 @@ SubGhzProtocolStatus
                 instance->key_idx = decoder.key_idx;
                 FURI_LOG_I(TAG, "Decoded key_idx=%d from original signal", instance->key_idx);
 
-                if(instance->serial == 0 && instance->cnt == 0) {
-                    instance->serial = decoder.serial;
-                    instance->cnt = decoder.cnt;
-                    instance->btn = decoder.btn;
+                if(instance->generic.serial == 0 && instance->generic.cnt == 0) {
+                    instance->generic.serial = decoder.generic.serial;
+                    instance->generic.cnt = decoder.generic.cnt;
+                    instance->generic.btn = decoder.generic.btn;
                     FURI_LOG_I(
                         TAG,
                         "Also decoded: Ser=%08lX Cnt=%06lX Btn=%02X",
-                        (unsigned long)instance->serial,
-                        (unsigned long)instance->cnt,
-                        instance->btn);
+                        (unsigned long)instance->generic.serial,
+                        (unsigned long)instance->generic.cnt,
+                        instance->generic.btn);
                 }
             } else {
                 FURI_LOG_W(
@@ -1871,15 +1819,15 @@ SubGhzProtocolStatus
             }
         }
 
-        uint32_t old_cnt = instance->cnt;
-        instance->cnt = (instance->cnt + 1) & 0xFFFFFF;
+        uint32_t old_cnt = instance->generic.cnt;
+        instance->generic.cnt = (instance->generic.cnt + 1) & 0xFFFFFF;
         FURI_LOG_I(
             TAG,
             "Counter incremented: %06lX -> %06lX",
             (unsigned long)old_cnt,
-            (unsigned long)instance->cnt);
+            (unsigned long)instance->generic.cnt);
 
-        uint8_t type_byte = (uint8_t)(instance->key1_high >> 24);
+        uint8_t type_byte = (uint8_t)(instance->generic.data >> 56);
         if(instance->vag_type == 1 && type_byte == 0x00) {
             FURI_LOG_I(
                 TAG,
@@ -1914,30 +1862,28 @@ SubGhzProtocolStatus
 
         FURI_LOG_I(
             TAG,
-            "Upload built: %zu pulses, Key1=%08lX%08lX Key2=%04lX",
+            "Upload built: %zu pulses, Key1=%016llX Key2=%04llX",
             instance->size_upload,
-            (unsigned long)instance->key1_high,
-            (unsigned long)instance->key1_low,
-            (unsigned long)(instance->key2_low & 0xFFFF));
+            (unsigned long long)instance->generic.data,
+            (unsigned long long)(instance->generic.data_2 & 0xFFFF));
 
         flipper_format_rewind(flipper_format);
         uint8_t key1_bytes[8];
-        key1_bytes[0] = (uint8_t)(instance->key1_high >> 24);
-        key1_bytes[1] = (uint8_t)(instance->key1_high >> 16);
-        key1_bytes[2] = (uint8_t)(instance->key1_high >> 8);
-        key1_bytes[3] = (uint8_t)(instance->key1_high);
-        key1_bytes[4] = (uint8_t)(instance->key1_low >> 24);
-        key1_bytes[5] = (uint8_t)(instance->key1_low >> 16);
-        key1_bytes[6] = (uint8_t)(instance->key1_low >> 8);
-        key1_bytes[7] = (uint8_t)(instance->key1_low);
+        key1_bytes[0] = (uint8_t)(instance->generic.data >> 56);
+        key1_bytes[1] = (uint8_t)(instance->generic.data >> 48);
+        key1_bytes[2] = (uint8_t)(instance->generic.data >> 40);
+        key1_bytes[3] = (uint8_t)(instance->generic.data >> 32);
+        key1_bytes[4] = (uint8_t)(instance->generic.data >> 24);
+        key1_bytes[5] = (uint8_t)(instance->generic.data >> 16);
+        key1_bytes[6] = (uint8_t)(instance->generic.data >> 8);
+        key1_bytes[7] = (uint8_t)(instance->generic.data);
         if(!flipper_format_update_hex(flipper_format, "Key", key1_bytes, 8)) {
             FURI_LOG_W(TAG, "Failed to update Key in file (non-fatal)");
         }
 
         flipper_format_rewind(flipper_format);
-        instance->key2_high = 0;
-        uint16_t key2_write = (uint16_t)(instance->key2_low & 0xFFFF);
-        instance->key2_low = (uint32_t)key2_write;
+        uint16_t key2_write = (uint16_t)(instance->generic.data_2 & 0xFFFF);
+        instance->generic.data_2 = (uint64_t)key2_write;
         uint8_t key2_write_bytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         key2_write_bytes[6] = (uint8_t)((key2_write >> 8) & 0xFF);
         key2_write_bytes[7] = (uint8_t)(key2_write & 0xFF);
@@ -1946,21 +1892,21 @@ SubGhzProtocolStatus
         }
 
         flipper_format_rewind(flipper_format);
-        uint32_t serial32 = instance->serial;
+        uint32_t serial32 = instance->generic.serial;
         if(!flipper_format_update_uint32(flipper_format, "Serial", &serial32, 1)) {
             flipper_format_rewind(flipper_format);
             flipper_format_insert_or_update_uint32(flipper_format, "Serial", &serial32, 1);
         }
 
         flipper_format_rewind(flipper_format);
-        uint32_t cnt32 = instance->cnt;
+        uint32_t cnt32 = instance->generic.cnt;
         if(!flipper_format_update_uint32(flipper_format, "Cnt", &cnt32, 1)) {
             flipper_format_rewind(flipper_format);
             flipper_format_insert_or_update_uint32(flipper_format, "Cnt", &cnt32, 1);
         }
 
         flipper_format_rewind(flipper_format);
-        uint32_t btn32 = instance->btn;
+        uint32_t btn32 = instance->generic.btn;
         if(!flipper_format_update_uint32(flipper_format, "Btn", &btn32, 1)) {
             flipper_format_rewind(flipper_format);
             flipper_format_insert_or_update_uint32(flipper_format, "Btn", &btn32, 1);
@@ -1983,9 +1929,9 @@ SubGhzProtocolStatus
         FURI_LOG_I(
             TAG,
             "Updated file: Serial=%08lX Cnt=%06lX Btn=%02X KeyIdx=%d Type=%d",
-            (unsigned long)instance->serial,
-            (unsigned long)instance->cnt,
-            instance->btn,
+            (unsigned long)instance->generic.serial,
+            (unsigned long)instance->generic.cnt,
+            instance->generic.btn,
             instance->key_idx,
             instance->vag_type);
 
