@@ -23,6 +23,13 @@ jobs:
           - name: Unleashed release
             sdk-index-url: https://up.unleashedflip.com/directory.json
             sdk-channel: release
+          - name: Momentum dev
+            sdk-index-url: https://up.momentum-fw.dev/firmware/directory.json
+            sdk-channel: dev
+          - name: Momentum release
+            sdk-index-url: https://up.momentum-fw.dev/firmware/directory.json
+            sdk-channel: release
+
     name: 'ufbt: Build for ${{ matrix.name }}'
     steps:
       - name: Checkout
@@ -38,5 +45,5 @@ jobs:
       - name: Upload app artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event.repository.name }}-${{ steps.build-app.outputs.suffix }}
+          name: ${{ github.event.repository.name }}-${{ steps.build-app.outputs.suffix }}.fap
           path: ${{ steps.build-app.outputs.fap-artifacts }}
