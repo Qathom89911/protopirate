@@ -186,7 +186,8 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
     canvas_set_font(canvas, FontSecondary);
 
     // Increment animation frame
-    model->animation_frame = (model->animation_frame + 1) % 96;
+    static uint8_t animation_frame = 0;
+    animation_frame = (animation_frame + 1) % 96;
 
     size_t item_count = ProtoPirateReceiverMenuItemArray_size(model->history_item_arr);
     bool scrollbar = item_count > MENU_ITEMS;
@@ -269,7 +270,7 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
             // Three waves of expanding circles with different speeds
             for(int wave = 0; wave < 3; wave++) {
                 // Calculate radius for this wave with offset
-                int base_radius = ((model->animation_frame + wave * 32) % 96) / 3;
+                int base_radius = ((animation_frame + wave * 32) % 96) / 3;
 
                 if(base_radius < 28) {
                     // Calculate fade based on distance from center
@@ -313,7 +314,7 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
             }
 
             // Rotating sweep line with glow effect
-            float sweep_angle = (model->animation_frame * 3.75f) * 3.14159f / 180.0f;
+            float sweep_angle = (animation_frame * 3.75f) * 3.14159f / 180.0f;
 
             // Main sweep line
             int sweep_x = center_x + 22 * cosf(sweep_angle);
@@ -351,7 +352,7 @@ void protopirate_view_receiver_draw(Canvas* canvas, ProtoPirateReceiverModel* mo
             }
 
             // Pulsing center
-            int pulse = (model->animation_frame % 32);
+            int pulse = (animation_frame % 32);
             if(pulse < 16) {
                 canvas_draw_disc(canvas, center_x, center_y, 2);
             } else {
