@@ -607,11 +607,18 @@ static void timing_tuner_pair_callback(void* context, bool level, uint32_t durat
 }
 
 void protopirate_scene_timing_tuner_on_enter(void* context) {
+    furi_check(context);
     ProtoPirateApp* app = context;
 
     FURI_LOG_I(TAG, "Entering Timing Tuner");
 
     g_timing_ctx = malloc(sizeof(TimingTunerContext));
+    if(!g_timing_ctx) {
+        FURI_LOG_E(TAG, "Failed to allocate timing tuner context");
+        notification_message(app->notifications, &sequence_error);
+        scene_manager_previous_scene(app->scene_manager);
+        return;
+    }
     memset(g_timing_ctx, 0, sizeof(TimingTunerContext));
     g_timing_ctx->is_receiving = false;
     g_timing_ctx->has_match = false;
