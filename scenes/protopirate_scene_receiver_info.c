@@ -29,6 +29,9 @@ void protopirate_scene_receiver_info_on_enter(void* context) {
     furi_check(context);
     ProtoPirateApp* app = context;
 
+    // Always reset per-enter to avoid stale static state
+    is_emu_off = false;
+
     widget_reset(app->widget);
 
     FuriString* text;
