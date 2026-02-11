@@ -718,7 +718,16 @@ bool protopirate_scene_sub_decode_on_event(void* context, SceneManagerEvent even
             FURI_LOG_I(TAG, "StartingWorker: Reading file metadata");
 
             Storage* storage = furi_record_open(RECORD_STORAGE);
+            if(!storage) {
+                FURI_LOG_E(TAG, "Failed to open storage");
+                break;
+            }
             FlipperFormat* fff_data_file = flipper_format_file_alloc(storage);
+            if(!fff_data_file) {
+                FURI_LOG_E(TAG, "Failed to allocate FlipperFormat");
+                break;
+            }
+
             FuriString* temp_str = furi_string_alloc();
             bool setup_ok = false;
 
@@ -807,9 +816,11 @@ bool protopirate_scene_sub_decode_on_event(void* context, SceneManagerEvent even
                 setup_ok = true;
             } while(false);
 
-            flipper_format_free(fff_data_file);
+            if(fff_data_file) flipper_format_free(fff_data_file);
+
+            if(storage) furi_record_close(RECORD_STORAGE);
+
             furi_string_free(temp_str);
-            furi_record_close(RECORD_STORAGE);
 
             if(!setup_ok) {
                 furi_string_set(ctx->result, "Failed to read file metadata");
