@@ -680,8 +680,9 @@ bool protopirate_scene_timing_tuner_on_event(void* context, SceneManagerEvent ev
         }
     } else if(event.type == SceneManagerEventTypeTick) {
         if(g_timing_ctx && g_timing_ctx->is_receiving && !g_timing_ctx->has_match) {
-            g_timing_ctx->rssi = subghz_devices_get_rssi(app->txrx->radio_device);
-
+            if(app->txrx->radio_device) {
+                g_timing_ctx->rssi = subghz_devices_get_rssi(app->txrx->radio_device);
+            }
             // Blink the light like the SubGHZ app
             notification_message(app->notifications, &sequence_blink_cyan_10);
         }
