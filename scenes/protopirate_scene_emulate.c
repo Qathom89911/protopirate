@@ -24,23 +24,13 @@ typedef struct {
 
 static EmulateContext* emulate_context = NULL;
 
-#define TX_PRESET_POWER_COUNT 9
+#define TX_PRESET_VALUES_AM    8 //Gets 1 added, so is 1 less than actual value.
+#define TX_PRESET_VALUES_COUNT 17
+
 //I had to skip the +10dBM and -6dBm Values, use only ones AM/FM have in common.
 //Highest Value is 12dBm for AM, 10 for FM. So Menu needs to reflect that.
-const uint8_t tx_power_value_AM[TX_PRESET_POWER_COUNT] = {
-    0,
-    0xC0, //12dBm
-    0xCD, //7dBm
-    0x86, //5dBm
-    0x50, //0dBm
-    0x26, // -10dBm
-    0x1D, // -15dBm
-    0x17, //-20dBm
-    0x03 //-30dBm
-};
-
-//FM PATable Values. We have 8, not 10 (missing 12dBM and -6dBm that are in AM)
-const uint8_t tx_power_value_FM[TX_PRESET_POWER_COUNT] = {
+const uint8_t tx_power_value[TX_PRESET_VALUES_COUNT] = {
+    //FM Power Values for 1st PA Table Byte.
     0,
     0xC0, // 10dBm
     0xC8, //7dBm
@@ -50,6 +40,16 @@ const uint8_t tx_power_value_FM[TX_PRESET_POWER_COUNT] = {
     0x1D, //-15dBm
     0x0E, // -20dBm
     0x12, //-30dBm
+
+    //AM Power Values for 1st PA Table Byte.
+    0xC0, //12dBm
+    0xCD, //7dBm
+    0x86, //5dBm
+    0x50, //0dBm
+    0x26, // -10dBm
+    0x1D, // -15dBm
+    0x17, //-20dBm
+    0x03 //-30dBm
 };
 
 void stop_tx(ProtoPirateApp* app) {
@@ -557,6 +557,8 @@ uint8_t get_tx_preset_byte(uint8_t* preset_data) {
 }
 
 bool protopirate_scene_emulate_on_event(void* context, SceneManagerEvent event) {
+#define INVALID_PRESET         "Cannot set TX power on this preset."
+#define CUSTOM_PRESET_DATA_KEY "Custom_preset_data"
     ProtoPirateApp* app = context;
     bool consumed = false;
 
@@ -597,14 +599,14 @@ bool protopirate_scene_emulate_on_event(void* context, SceneManagerEvent event) 
                     flipper_format_rewind(emulate_context->flipper_format);
                     if(flipper_format_get_value_count(
                            emulate_context->flipper_format,
-                           "Custom_preset_data",
+                           CUSTOM_PRESET_DATA_KEY,
                            &uint32_array_size) &&
                        uint32_array_size > 0 && uint32_array_size < 1024) {
                         preset_data = malloc(uint32_array_size);
                         free_custom_data = true;
                         if(!flipper_format_read_hex(
                                emulate_context->flipper_format,
-                               "Custom_preset_data",
+                               CUSTOM_PRESET_DATA_KEY,
                                preset_data,
                                uint32_array_size)) {
                             FURI_LOG_W(TAG, "Custom Preset not Loaded, trying AM650");
@@ -634,27 +636,29 @@ bool protopirate_scene_emulate_on_event(void* context, SceneManagerEvent event) 
                 }
 
                 if(preset_data) {
-                    uint8_t preset_offset = 0;
-                    //Set the TX Power
                     if(app->tx_power) {
+                        //Grab the start of the PA table for this Preset.
+                        uint8_t preset_offset = 0;
                         preset_offset = get_tx_preset_byte(preset_data);
-                        //Try the 1st PA Table byte, use FM values
-                        if(preset_data[preset_offset]) {
-                            FURI_LOG_I(TAG, "FM PA table found. Applying TX Power");
-                            preset_data[preset_offset] = tx_power_value_FM[app->tx_power];
+
+                        //Grab the AM and FM byte now, so we can do proper checks.
+                        uint8_t fm_byte = preset_data[preset_offset];
+                        uint8_t am_byte = preset_data[preset_offset + 1];
+
+                        if(fm_byte && am_byte) {
+                            //Must be a custom Preset with weird PA table not in FW code, dont touch it.
+                            FURI_LOG_I(TAG, INVALID_PRESET);
+                        } else if(fm_byte) {
+                            FURI_LOG_I(TAG, "FM PA table found.");
+                            preset_data[preset_offset] = tx_power_value[app->tx_power];
+                        } else if(am_byte) {
+                            FURI_LOG_I(TAG, "AM PA table found.");
+                            preset_data[preset_offset + 1] =
+                                tx_power_value[TX_PRESET_VALUES_AM + app->tx_power];
                         } else {
-                            //Try the 2nd PA Table byte, use AM values
-                            preset_offset++;
-                            if(preset_data[preset_offset]) {
-                                FURI_LOG_I(TAG, "AM PA table found. Applying TX Power");
-                                preset_data[preset_offset] = tx_power_value_AM[app->tx_power];
-                            } else {
-                                FURI_LOG_I(TAG, "Weird PA table found, not applying TX power.");
-                                //Must be a custom Preset with weird PA table not in FW code, dont touch it.
-                            }
+                            //Must be a custom Preset with weird PA table not in FW code, dont touch it.
+                            FURI_LOG_I(TAG, INVALID_PRESET);
                         }
-                    } else {
-                        FURI_LOG_I(TAG, "Using Preset TX Power.");
                     }
 
                     // Configure radio for TX
@@ -692,7 +696,6 @@ bool protopirate_scene_emulate_on_event(void* context, SceneManagerEvent event) 
 
                 if(free_custom_data)
                     free(preset_data); //We have used the preset, I alloced it I have to free.
-
             } else {
                 FURI_LOG_E(TAG, "No transmitter available");
                 notification_message(app->notifications, &sequence_error);
