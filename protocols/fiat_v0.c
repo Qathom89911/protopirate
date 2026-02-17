@@ -1,6 +1,7 @@
 #include "fiat_v0.h"
 #include "../protopirate_app_i.h"
 #include <lib/toolbox/manchester_decoder.h>
+#include <inttypes.h>
 
 #define TAG                     "FiatProtocolV0"
 #define FIAT_PROTOCOL_V0_NAME   "Fiat V0"
@@ -242,7 +243,7 @@ SubGhzProtocolStatus
             } else {
                 FURI_LOG_E(
                     TAG,
-                    "Inconsistent Bit value of %" PRIu32 " was defaulted to 71",
+                    "Inconsistent Bit value of %d was defaulted to 71",
                     instance->generic.data_count_bit);
                 instance->generic.data_count_bit = 71;
             }
