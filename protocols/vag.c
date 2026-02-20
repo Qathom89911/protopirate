@@ -67,13 +67,13 @@ static const SubGhzBlockConst subghz_protocol_vag_const = {
 #define VAG_T34_PREAMBLE_MIN 31u
 #define VAG_T34_SYNC_PAIRS   3u
 
-#define VAG_DATA_GAP_MIN     4001u
-#define VAG_TOTAL_BITS       80u
-#define VAG_KEY1_BITS        64u
-#define VAG_PREFIX_BITS      15u
-#define VAG_BIT_LIMIT        96u
-#define VAG_FRAME_PREFIX_T1  0x2F3Fu
-#define VAG_FRAME_PREFIX_T2  0x2F1Cu
+#define VAG_DATA_GAP_MIN    4001u
+#define VAG_TOTAL_BITS      80u
+#define VAG_KEY1_BITS       64u
+#define VAG_PREFIX_BITS     15u
+#define VAG_BIT_LIMIT       96u
+#define VAG_FRAME_PREFIX_T1 0x2F3Fu
+#define VAG_FRAME_PREFIX_T2 0x2F1Cu
 
 #define VAG_KEYS_COUNT 3
 
@@ -590,7 +590,6 @@ void subghz_protocol_decoder_vag_reset(void* context) {
     instance->decrypted = false;
 
     /* Reset decoder state to avoid stale parsing after external resets */
-    instance->te_last = 0;
     instance->data_low = 0;
     instance->data_high = 0;
     instance->bit_count = 0;
@@ -685,8 +684,7 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
                         instance->data_high = 0;
                         instance->bit_count = 0;
                         instance->vag_type = 1;
-                    } else if(
-                        instance->data_low == VAG_FRAME_PREFIX_T2 && instance->data_high == 0) {
+                    } else if(instance->data_low == VAG_FRAME_PREFIX_T2 && instance->data_high == 0) {
                         instance->data_low = 0;
                         instance->data_high = 0;
                         instance->bit_count = 0;
@@ -746,8 +744,7 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
         break;
 
     case VAGDecoderStepSync2A:
-        if(!level &&
-           DURATION_DIFF(duration, VAG_T34_TE_SHORT) < VAG_T34_TE_DELTA &&
+        if(!level && DURATION_DIFF(duration, VAG_T34_TE_SHORT) < VAG_T34_TE_DELTA &&
            DURATION_DIFF(instance->decoder.te_last, VAG_T34_TE_LONG) < VAG_T34_LONG_DELTA) {
             instance->decoder.te_last = duration;
             instance->decoder.parser_step = VAGDecoderStepSync2B;
@@ -766,8 +763,7 @@ void subghz_protocol_decoder_vag_feed(void* context, bool level, uint32_t durati
         break;
 
     case VAGDecoderStepSync2C:
-        if(!level &&
-           DURATION_DIFF(duration, VAG_T34_SYNC) < VAG_T34_SYNC_DELTA &&
+        if(!level && DURATION_DIFF(duration, VAG_T34_SYNC) < VAG_T34_SYNC_DELTA &&
            DURATION_DIFF(instance->decoder.te_last, VAG_T34_SYNC) < VAG_T34_SYNC_DELTA) {
             instance->mid_count++;
             instance->decoder.parser_step = VAGDecoderStepSync2B;
