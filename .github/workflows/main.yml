@@ -1,0 +1,28 @@
+name: "Build ProtoPirate"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-fap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build with uFBT
+        uses: flipperdevices/flipperzero-ufbt-action@v1
+        with:
+          app-dir: .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProtoPirate-Build
+          path: "./dist/*.fap"
